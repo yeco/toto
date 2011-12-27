@@ -26,7 +26,7 @@ Gem::Specification.new do |s|
      "VERSION",
      "lib/ext/ext.rb",
      "lib/toto.rb",
-     "test/articles/1900-05-17-the-wonderful-wizard-of-oz.txt",
+     "test/articles/1990-05-17-the-wonderful-wizard-of-oz.txt",
      "test/articles/2001-01-01-two-thousand-and-one.txt",
      "test/articles/2009-04-01-tilt-factor.txt",
      "test/articles/2009-12-04-some-random-article.txt",
@@ -64,17 +64,20 @@ Gem::Specification.new do |s|
       s.add_runtime_dependency(%q<builder>, [">= 0"])
       s.add_runtime_dependency(%q<rack>, [">= 0"])
       s.add_runtime_dependency(%q<rdiscount>, [">= 0"])
+      s.add_runtime_dependency(%q<coderay>, ["= 0.9.8"])
     else
       s.add_dependency(%q<riot>, [">= 0"])
       s.add_dependency(%q<builder>, [">= 0"])
       s.add_dependency(%q<rack>, [">= 0"])
       s.add_dependency(%q<rdiscount>, [">= 0"])
+      s.add_dependency(%q<coderay>, ["= 0.9.8"])
     end
   else
     s.add_dependency(%q<riot>, [">= 0"])
     s.add_dependency(%q<builder>, [">= 0"])
     s.add_dependency(%q<rack>, [">= 0"])
     s.add_dependency(%q<rdiscount>, [">= 0"])
+    s.add_dependency(%q<coderay>, ["= 0.9.8"])
   end
 end
 

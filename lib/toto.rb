@@ -4,6 +4,7 @@ require 'erb'
 require 'rack'
 require 'digest'
 require 'open-uri'
+require 'coderay'
 
 if RUBY_PLATFORM =~ /win32/
   require 'maruku'
@@ -37,6 +38,23 @@ module Toto
     def to_html page, config, &blk
       path = ([:layout, :repo].include?(page) ? Paths[:templates] : Paths[:pages])
       config[:to_html].call(path, page, binding)
+    end
+
+    def highlight_code text
+      markdown(text).gsub(/<pre type="(.*?)">(.*?)<\/pre>/m) do |code|
+        if $1 == 'console'
+          type = nil
+        else
+          type = $1.to_sym
+        end
+        substitute_additional_colors CodeRay.scan($2, type).html(:wrap => :div, :bold_every => false, :line_numbers => false, :css => :class)
+      end
+    end
+
+    def substitute_additional_colors(code)
+      code.gsub(/\{\^([^\:]*)\:([^\{]*)\^\}/m) do |code|
+        "<span class='#{$1}'>#{$2}</span>"
+      end
     end
 
     def markdown text
@@ -78,25 +96,24 @@ module Toto
       end}.merge archives
     end
 
-	def archives filter = "", tag = nil
-	  entries = ! self.articles.empty??
-	    self.articles.select do |a|
-	      filter !~ /^\d{4}/ || File.basename(a) =~ /^#{filter}/ 
-	    end.reverse.map do |article|
-	      Article.new article, @config 
-	    end : []
-	 
-	  if tag.nil?
-	    { :archives => Archives.new(entries, @config) }
-	  else 
-	    tagged = entries.select do |article|
-	      article_tag = article[:tag]
-	      article_tag && article_tag.slugize == tag
-	    end 
-	    { :tag => tagged.first[:tag], :archives => tagged } if tagged.size > 0 
-	  end
+    def archives filter = "", tag = nil
+      entries = ! self.articles.empty??
+        self.articles.select do |a|
+          filter !~ /^\d{4}/ || File.basename(a) =~ /^#{filter}/
+        end.reverse.map do |article|
+          Article.new article, @config
+        end : []
 
-	end
+      if tag.nil?
+        { :archives => Archives.new(entries, @config) }
+      else
+        tagged = entries.select do |article|
+          article_tag = article[:tag]
+          article_tag && article_tag.slugize == tag
+        end
+        { :tag => tagged.first[:tag], :archives => tagged } if tagged.size > 0
+      end
+    end
 
     def article route
       Article.new("#{Paths[:articles]}/#{route.join('-')}.#{self[:ext]}", @config).load
@@ -114,7 +131,7 @@ module Toto
       end
 
       body, status = if Context.new.respond_to?(:"to_#{type}")
-        if route.first =~ /\d{4}/
+        if route.first =~ /^\d{4}$/
           case route.size
             when 1..3
               context[archives(route * '-'), :archives]
@@ -122,12 +139,21 @@ module Toto
               context[article(route), :article]
             else http 400
           end
-        elsif route.first == 'tags' && route.size == 2 
-		  if (data = archives('', route[1])).nil?
-		    http 404 
-		  else 
-		    context[data, :tag]
-		end
+        elsif route.first =~ /^tags/
+          if route[1].nil? || (data = archives('', route[1])).nil?
+            http 404
+          else
+            context[data, :tags]
+          end
+        elsif route[0] == 'codepath' && route[1] == '1' && route[2] == 'pages' && !route[3].nil?
+          code_path_index = route[3].to_i
+          if (1..29).include?(code_path_index) && type == :html
+            code_path_article = Article.new("#{Paths[:articles]}/codepath/1/pages/#{code_path_index}.html", @config).load
+            code_path_article.merge!({:code_path_index => code_path_index, :code_path_count => 29})
+            context[code_path_article, :codepath]
+          else
+            http 404
+          end
         elsif respond_to?(path)
           context[send(path, type), path.to_sym]
         elsif (repo = @config[:github][:repos].grep(/#{path}/).first) &&
@@ -243,7 +269,7 @@ module Toto
 
     def load
       data = if @obj.is_a? String
-        meta, self[:body] = File.read(@obj).split(/\n\n/, 2)
+        meta, self[:body] = File.read(add_leading_zeros(@obj)).split(/\n\n/, 2)
 
         # use the date from the filename, or else toto won't find the article
         @obj =~ /\/(\d{4}-\d{2}-\d{2})[^\/]*$/
@@ -283,11 +309,25 @@ module Toto
     alias :permalink url
 
     def body
-      markdown self[:body].sub(@config[:summary][:delim], '') rescue markdown self[:body]
+      highlight_code self[:body].sub(@config[:summary][:delim], '') rescue highlight_code self[:body]
     end
 
     def path
-      "/#{@config[:prefix]}#{self[:date].strftime("/%Y/%m/%d/#{slug}/")}".squeeze('/')
+      if self[:url]
+        self[:url]
+      else
+        "/#{@config[:prefix]}#{remove_leading_zeros(self[:date].strftime("/%Y/%m/%d/#{slug}"))}".squeeze('/').squeeze('-')
+      end
+    end
+
+    def remove_leading_zeros(date_path)
+      date_path.gsub!(/^\/(\d{4})\/0(\d)\/(.*)/, '/\1/\2/\3')
+      date_path.gsub(/^\/(\d{4})\/(\d{1,2})\/0(\d)\/(.*)/, '/\1/\2/\3/\4')
+    end
+
+    def add_leading_zeros(date_path)
+      date_path.gsub!(/\/(\d{4})-(\d{1})-(.*)/, '/\1-0\2-\3')
+      date_path.gsub(/\/(\d{4})-(\d{2})-(\d{1})-(.*)/, '/\1-\2-0\3-\4')
     end
 
     def title()   self[:title] || "an article"               end
@@ -370,4 +410,5 @@ module Toto
     end
   end
 end
+
 
